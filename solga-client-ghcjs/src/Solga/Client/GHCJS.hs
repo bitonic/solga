@@ -224,15 +224,16 @@ performXHR getResp respType req@Request{..} = do
   DOM.open xhr reqMethod uri True reqUser reqPassword
   for_ reqHeaders (uncurry (DOM.setRequestHeader xhr))
   result :: MVar (Either XHRError (Response a)) <- liftIO newEmptyMVar
-  let onLoad = lift $ do
+  let printOnException str m = m `onException` putStrLn str
+  let onLoad = lift $ printOnException "FF-BUG load" $ do
         status <- DOM.getStatus xhr
         resp <- getResp xhr
         void (liftIO (tryPutMVar result (Right (Response status resp))))
   let bracketId a b = bracket a id b
   bracketId
-    (DOM.Event.on xhr DOM.Event.error (liftIO (void (tryPutMVar result (Left XHRError)))))
+    (DOM.Event.on xhr DOM.Event.error (liftIO (printOnException "FF-BUG error" (void (tryPutMVar result (Left XHRError))))))
     (\_ -> bracketId
-      (DOM.Event.on xhr DOM.Event.abortEvent (liftIO (void (tryPutMVar result (Left XHRAborted)))))
+      (DOM.Event.on xhr DOM.Event.abortEvent (liftIO (printOnException "FF-BUG abort" (void (tryPutMVar result (Left XHRAborted))))))
       (\_ -> bracketId
         (DOM.Event.on xhr DOM.Event.load onLoad)
         (\_ ->
